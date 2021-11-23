@@ -7,7 +7,7 @@ import pyppeteer
 
 #google-chrome --remote-debugging-port=9222 --user-data-dir=/home/user/chrome
 
-LOGIN_PAGE = "https://start.telebank.co.il/login/#/LOGIN_PAGE"
+LOGIN_PAGE = "login/#/LOGIN_PAGE"
 BASE_URL = "https://start.telebank.co.il/"
 HOME_PAGE = "apollo/core/templates/RETAIL/masterPage.html#/MY_ACCOUNT_HOMEPAGE"
 OSH_PAGE = "apollo/core/templates/RETAIL/masterPage.html#/OSH_LENTRIES_ALTAMIRA"
@@ -83,46 +83,38 @@ class TableDumper:
             except pyppeteer.errors.ElementHandleError:
                 break;  
 
-
-async def get_table(page):
-    # with SQLite(DB_FILE) as cur:
+async def get_account_transactions(page):
+    await go_and_wait_url( page, f"{BASE_URL}{OSH_PAGE}" )
+    time.sleep(10)
     
-    #     create_day_time_table(cur)
-        
-    #     assert( len(data) %DAY_TIME_RECORD_WIDTH == 0)
-    
-    #     for i in range(DAY_TIME_RECORD_WIDTH, len(data), DAY_TIME_RECORD_WIDTH):
-    #         insert_cmd = build_insert_cmd( year, month, data[i:i+DAY_TIME_RECORD_WIDTH])
-    #         cur.execute( insert_cmd )
-
-    i = 0
-    while True:   
-        try:
-            x = await page.evaluate('document.querySelectorAll("[id=rc-table-row-%d]")[1].innerText'%i, force_expr=True)
-            print(x)
-            i += 1
-        except pyppeteer.errors.ElementHandleError:
-            print("exception %d"%i)
-            break;  
-
-async def get_last_transactions():
-    
-    browser = await pyppeteer.connect(browserWSEndpoint  = "ws://127.0.0.1:9222/devtools/browser/72298655-0e00-46c8-986c-c7bbf20e981f")
-    page = (await browser.pages())[0]
-
-    #await get_table(page)
-
     td = TableDumper(page, OUTPUT_DB)
     td.create_table( "osh" )
     await td.dump_url_to_db() 
 
-    #f"{BASE_URL}{OSH_PAGE}"
-    #await go_and_wait_url( page, f"{BASE_URL}{CREDIT_PAGE}" )
 
-       
-    #await page.click('#dateFilter')
-    #await page.click('#appDropDown-1')
-    #await get_table(page)
+async def get_credit_transactions(page):
+    await go_and_wait_url( page, f"{BASE_URL}{CREDIT_PAGE}" )
+    time.sleep(5)
+    await page.click('#dateFilter')
+    time.sleep(1)
+    await page.click('#appDropDown-1')
+    time.sleep(5)
+    
+    td = TableDumper(page, OUTPUT_DB)
+    td.create_table( "osh" )
+    await td.dump_url_to_db()     
+
+async def get_last_transactions():
+    
+    browser = await pyppeteer.connect(browserWSEndpoint  = "ws://127.0.0.1:9222/devtools/browser/6783c4cf-5aae-488c-abf6-15bccca86c81")
+    page = (await browser.pages())[0]
+
+    await wait_url( page, f"{BASE_URL}{HOME_PAGE}")
+
+    #await get_account_transactions(page)
+    await get_credit_transactions(page)
+
+    await browser.disconnect()
 
 async def main():
     await get_last_transactions()
