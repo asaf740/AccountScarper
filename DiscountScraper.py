@@ -57,7 +57,7 @@ async def go_and_wait_url( page, url ):
         cur_url = await get_current_url(page)
         if cur_url == url:
             return
-        time.sleep( WAIT_INTERVAL )        
+        time.sleep( WAIT_INTERVAL )       
 
 
 async def login(page):
@@ -100,23 +100,20 @@ class TableDumper:
                 break;  
 
 async def get_account_transactions(page):
-    print("***")
-    await go_and_wait_url( page, f"{BASE_URL}{OSH_PAGE}" )
-    print("xxx")
-    await page.waitForNavigation()
-    print("yyy")
     
+    await go_and_wait_url( page, f"{BASE_URL}{OSH_PAGE}" )
+            
     td = TableDumper(page, OUTPUT_DB)
     td.create_table( "osh" )
     await td.dump_url_to_db() 
-    print("zzz")
+    
 
 
 async def get_credit_transactions(page):
     await go_and_wait_url( page, f"{BASE_URL}{CREDIT_PAGE}" )
-    time.sleep(5)
+    await page.waitForSelector('#dateFilter', visible = True)
     await page.click('#dateFilter')
-    time.sleep(1)
+    await page.waitForSelector('#appDropDown-1', visible = True)
     await page.click('#appDropDown-1')
     time.sleep(5)
     
@@ -126,7 +123,17 @@ async def get_credit_transactions(page):
 
 async def get_last_transactions():
 
-    browser = await pyppeteer.launch( headless = False )    
+    browser = await pyppeteer.launch( headless = False, ignoreHTTPSErrors = True, args = [
+      "--unlimited-storage",
+      "--full-memory-crash-report",
+      "--disable-gpu",
+      "--ignore-certificate-errors",
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--lang=en-US;q=0.9,en;q=0.8",
+      "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36",
+    ])    
     page = (await browser.pages())[0]
     
     await login(page)
@@ -134,12 +141,15 @@ async def get_last_transactions():
     #browser = await pyppeteer.connect(browserWSEndpoint  = "ws://127.0.0.1:9222/devtools/browser/6783c4cf-5aae-488c-abf6-15bccca86c81")
     #page = (await browser.pages())[0]
 
+    print("getting osh data")
     await get_account_transactions(page)
     
-    #await get_credit_transactions(page)
-    print("!!!")
+    print("getting credit cards data")
+    await get_credit_transactions(page)
+    
+    print("closing")
     await browser.close()
-    print("!!!")
+    
 
 async def main():
     await get_last_transactions()
