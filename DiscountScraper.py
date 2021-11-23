@@ -78,48 +78,59 @@ class TableDumper:
         self.page = page
         self.db_path = db_path
         
-    def create_table( self, table_name ):
+    def create_table( self, table_name, table_desc ):
         self.table_name = table_name
         with SQLite(self.db_path) as cur:
-            create_command = f""" CREATE TABLE IF NOT EXISTS {self.table_name} (date text, value_date text, description text, amount real)"""
+            create_command = f" CREATE TABLE IF NOT EXISTS {self.table_name} {table_desc} "
             cur.execute( create_command )
 
-    def insert_row_to_db(self, row ):
+    def insert_row_to_db(self, parsed_row ):        
         with SQLite(self.db_path) as cur:
-            insert_command = f""" INSERT INTO {self.table_name} values (?, ?, ?, ?)"""
-            cur.execute( insert_command, row.split("\n")[:4] )
+            values = ", ".join(['?' for i in range(len(parsed_row))])
+            insert_command = f""" INSERT INTO {self.table_name} values ({values})"""
+            cur.execute( insert_command, parsed_row )
 
-    async def dump_url_to_db( self ):
+    async def dump_url_to_db( self, parse_row ):
         i = 0
         while True:   
             try:
                 row = await self.page.evaluate('document.querySelectorAll("[id=rc-table-row-%d]")[1].innerText'%i, force_expr=True)
-                self.insert_row_to_db( row )
+                parsed_row = parse_row( row )
+                self.insert_row_to_db( parsed_row )
                 i += 1
             except pyppeteer.errors.ElementHandleError:
                 break;  
 
+def parse_account_row( row ):
+    return row.split("\n")[:4]
+
 async def get_account_transactions(page):
     
     await go_and_wait_url( page, f"{BASE_URL}{OSH_PAGE}" )
-            
+    time.sleep(10)        
     td = TableDumper(page, OUTPUT_DB)
-    td.create_table( "osh" )
-    await td.dump_url_to_db() 
+    td.create_table( "osh", "(date text, value_date text, description text, amount real)" )
+    await td.dump_url_to_db( parse_account_row ) 
     
 
+def parse_credit_row( row ):
+    values = row.split("\n")    
+    if len(values) == 7:
+        return values
+    return values[:4] + [''] + values[4:]
 
 async def get_credit_transactions(page):
     await go_and_wait_url( page, f"{BASE_URL}{CREDIT_PAGE}" )
     await page.waitForSelector('#dateFilter', visible = True)
+    time.sleep(10)
     await page.click('#dateFilter')
     await page.waitForSelector('#appDropDown-1', visible = True)
     await page.click('#appDropDown-1')
     time.sleep(5)
     
     td = TableDumper(page, OUTPUT_DB)
-    td.create_table( "osh" )
-    await td.dump_url_to_db()     
+    td.create_table( "credit", "(card text, description text, date text, total_amount text, comment text, value_date text, amount text)" )
+    await td.dump_url_to_db( parse_credit_row )
 
 async def get_last_transactions():
 
@@ -137,9 +148,6 @@ async def get_last_transactions():
     page = (await browser.pages())[0]
     
     await login(page)
-    
-    #browser = await pyppeteer.connect(browserWSEndpoint  = "ws://127.0.0.1:9222/devtools/browser/6783c4cf-5aae-488c-abf6-15bccca86c81")
-    #page = (await browser.pages())[0]
 
     print("getting osh data")
     await get_account_transactions(page)
