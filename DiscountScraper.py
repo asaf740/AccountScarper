@@ -1,8 +1,11 @@
 import re
 import time
 import asyncio
+import getpass
 import sqlite3
 import pyppeteer
+
+
 
 
 #google-chrome --remote-debugging-port=9222 --user-data-dir=/home/user/chrome
@@ -13,7 +16,7 @@ HOME_PAGE = "apollo/core/templates/RETAIL/masterPage.html#/MY_ACCOUNT_HOMEPAGE"
 OSH_PAGE = "apollo/core/templates/RETAIL/masterPage.html#/OSH_LENTRIES_ALTAMIRA"
 CREDIT_PAGE = "apollo/core/templates/RETAIL/masterPage.html#/CARD_DEBIT_TRANSACTION"
 
-WAIT_INTERVAL = 0.1
+WAIT_INTERVAL = 0.3
 
 OUTPUT_DB = "account.db"
 
@@ -31,11 +34,21 @@ class SQLite():
 async def get_current_url(page):
     return (await page.evaluate("() => window.location.href"))
 
+async def wait_navigation( browser, url ):
+    while True:
+        page = (await browser.pages())[0]
+        cur_url = await get_current_url(page)
+        if cur_url == url:
+            return
+        
+        time.sleep( WAIT_INTERVAL )    
+
 async def wait_url( page, url ):
     while True:
         cur_url = await get_current_url(page)
         if cur_url == url:
             return
+        
         time.sleep( WAIT_INTERVAL )
 
 async def go_and_wait_url( page, url ):
@@ -47,15 +60,18 @@ async def go_and_wait_url( page, url ):
         time.sleep( WAIT_INTERVAL )        
 
 
-async def login():
-    browser = await pyppeteer.launch( headless = False )    
-    page = await browser.newPage()
-    await page.goto( LOGIN_PAGE )
-    await page.type('input[name=tzId]', '123456780', delay = 20)
-    await page.type('input[name=tzPassword]', '123456789', delay = 20)
-    await page.type('input[name=aidnum]', '123456789', delay = 20)
+async def login(page):
+    await page.goto( f"{BASE_URL}{LOGIN_PAGE}" )
+    
+    
+    id =  input("tz: ")
+    password = getpass.getpass("password: ")
+    idnum = input("id: ")
+    await page.type('input[name=tzId]', id, delay = 20)
+    await page.type('input[name=tzPassword]', password, delay = 20)
+    await page.type('input[name=aidnum]', idnum, delay = 20)
     await page.click('.sendBtn')
-    time.sleep(3)
+    await page.waitForNavigation()
 
 class TableDumper:
     def __init__(self, page, db_path):
@@ -84,12 +100,16 @@ class TableDumper:
                 break;  
 
 async def get_account_transactions(page):
+    print("***")
     await go_and_wait_url( page, f"{BASE_URL}{OSH_PAGE}" )
-    time.sleep(10)
+    print("xxx")
+    await page.waitForNavigation()
+    print("yyy")
     
     td = TableDumper(page, OUTPUT_DB)
     td.create_table( "osh" )
     await td.dump_url_to_db() 
+    print("zzz")
 
 
 async def get_credit_transactions(page):
@@ -105,16 +125,21 @@ async def get_credit_transactions(page):
     await td.dump_url_to_db()     
 
 async def get_last_transactions():
-    
-    browser = await pyppeteer.connect(browserWSEndpoint  = "ws://127.0.0.1:9222/devtools/browser/6783c4cf-5aae-488c-abf6-15bccca86c81")
+
+    browser = await pyppeteer.launch( headless = False )    
     page = (await browser.pages())[0]
+    
+    await login(page)
+    
+    #browser = await pyppeteer.connect(browserWSEndpoint  = "ws://127.0.0.1:9222/devtools/browser/6783c4cf-5aae-488c-abf6-15bccca86c81")
+    #page = (await browser.pages())[0]
 
-    await wait_url( page, f"{BASE_URL}{HOME_PAGE}")
-
-    #await get_account_transactions(page)
-    await get_credit_transactions(page)
-
-    await browser.disconnect()
+    await get_account_transactions(page)
+    
+    #await get_credit_transactions(page)
+    print("!!!")
+    await browser.close()
+    print("!!!")
 
 async def main():
     await get_last_transactions()
