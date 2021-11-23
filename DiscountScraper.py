@@ -73,8 +73,7 @@ class TableDumper:
             insert_command = f""" INSERT INTO {self.table_name} values (?, ?, ?, ?)"""
             cur.execute( insert_command, row.split("\n")[:4] )
 
-    async def dump_url_to_db( self, url ):
-        #await go_and_wait_url(url)
+    async def dump_url_to_db( self ):
         i = 0
         while True:   
             try:
@@ -115,8 +114,9 @@ async def get_last_transactions():
 
     td = TableDumper(page, OUTPUT_DB)
     td.create_table( "osh" )
-    await td.dump_url_to_db( f"{BASE_URL}{OSH_PAGE}" )
+    await td.dump_url_to_db() 
 
+    #f"{BASE_URL}{OSH_PAGE}"
     #await go_and_wait_url( page, f"{BASE_URL}{CREDIT_PAGE}" )
 
        
